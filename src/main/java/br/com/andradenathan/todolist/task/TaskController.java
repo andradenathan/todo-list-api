@@ -1,10 +1,15 @@
 package br.com.andradenathan.todolist.task;
 
+import br.com.andradenathan.todolist.utils.Utils;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/tasks")
@@ -13,9 +18,36 @@ public class TaskController {
     private TaskRepository taskRepository;
 
     @PostMapping("/")
-    public Task create(@RequestBody Task taskData) {
+    public ResponseEntity create(@RequestBody Task taskData, HttpServletRequest request) {
+        var userId = request.getAttribute("userId");
+        var currentDate = LocalDateTime.now();
+
+        if(currentDate.isAfter(taskData.getStartedAt()) || currentDate.isAfter(taskData.getEndedAt())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("O usuário não pode inserir uma data menor do que a atual");
+        }
+
+        if(taskData.getStartedAt().isAfter(taskData.getEndedAt())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("A data de início deve ser maior que a de fim");
+        }
+
+        taskData.setUserId((UUID) userId);
+
         var task = this.taskRepository.save(taskData);
-        return task;
+        return ResponseEntity.status(HttpStatus.CREATED).body(task);
     }
 
+    @GetMapping("/")
+    public List<Task> list(HttpServletRequest request) {
+        var userId = request.getAttribute("userId");
+        var userTasks = this.taskRepository.findByUserId((UUID) userId);
+        return userTasks;
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity update(@RequestBody Task taskData, @PathVariable UUID id) {
+        var task = this.taskRepository.findById(id).orElse(null);
+        Utils.copyNonNullProperties(taskData, task);
+        return ResponseEntity.status(HttpStatus.OK).body(this.taskRepository.save(task));
+    }
 }

@@ -23,23 +23,32 @@ public class FilterTaskAuth extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        var authorization = request.getHeader("Authorization");
-        var authEncoded = authorization.split(" ")[1].trim();
+        var servletPath = request.getServletPath();
+        if (servletPath.startsWith("/tasks/")) {
 
-        byte[] authDecoded = Base64.getDecoder().decode(authEncoded);
-        var authString = new String(authDecoded);
+            var authorization = request.getHeader("Authorization");
+            var authEncoded = authorization.split(" ")[1].trim();
 
-        String[] credentials = authString.split(":");
-        String username = credentials[0];
-        String password = credentials[1];
+            byte[] authDecoded = Base64.getDecoder().decode(authEncoded);
+            var authString = new String(authDecoded);
 
-        var user = this.userRepository.findByUsername(username);
-        if(user == null) {
-            response.sendError(401, "Sem autorização");
+            String[] credentials = authString.split(":");
+            String username = credentials[0];
+            String password = credentials[1];
+
+            var user = this.userRepository.findByUsername(username);
+            if (user == null) {
+                response.sendError(401, "Sem autorização");
+            } else {
+                var verifiedPassword = BCrypt.verifyer().verify(password.getBytes(), user.getPassword().getBytes());
+                if (verifiedPassword.verified) {
+                    request.setAttribute("userId", user.getId());
+                    filterChain.doFilter(request, response);
+                }
+                else response.sendError(401);
+            }
         } else {
-            var verifiedPassword = BCrypt.verifyer().verify(password.getBytes(), user.getPassword().getBytes());
-            if(verifiedPassword.verified) filterChain.doFilter(request, response);
-            response.sendError(401);
+            filterChain.doFilter(request, response);
         }
     }
 }
